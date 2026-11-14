@@ -7,7 +7,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { GoogleHealthClient } from "./google-health";
-import { isoDaysAgo, todayIso } from "./dates";
+import { isoDaysAgo, localMidnightUtc, nextDayIso, todayIso } from "./dates";
 import { toLeanJson } from "./shape";
 
 /**
@@ -444,6 +444,37 @@ export function registerTools(
               ? await client.listByDate(data_type, start_date, end_date, opts)
               : await client.reconcile(data_type, start_date, end_date, opts);
         return jsonResult(result);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // Intra-day aggregates (e.g. hourly heart rate) via the rollUp endpoint:
+  // a whole day of raw heart-rate samples exceeds the Worker subrequest limit,
+  // while one rollUp request returns e.g. 24 hourly avg/min/max values.
+  server.registerTool(
+    "get_intraday_rollup",
+    {
+      title: "Intra-day Rollup (hourly)",
+      description: "Aggregate a data type into fixed time windows within one day — e.g. hourly heart rate (avg/min/max), hourly steps or calories. Supported types include heart-rate, steps, total-calories, active-zone-minutes, distance, floors, active-minutes. Uses the rollUp endpoint so a full day of heart rate fits in a single request.",
+      inputSchema: {
+        data_type: z.string().regex(/^[a-z0-9-]+$/).default("heart-rate").describe("Data type ID, e.g. \"heart-rate\"."),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Local calendar day, YYYY-MM-DD."),
+        window_minutes: z.number().int().min(1).max(1440).default(60).describe("Window size in minutes (60 = hourly)."),
+        time_zone: z.string().optional().describe("IANA timezone for the local day, e.g. \"Europe/Rome\". Defaults to the server timezone."),
+      },
+      annotations: READ_ONLY,
+    },
+    async ({ data_type, date, window_minutes, time_zone }) => {
+      try {
+        const tz = time_zone || timeZone;
+        const start = localMidnightUtc(date, tz);
+        const end = localMidnightUtc(nextDayIso(date), tz);
+        const now = new Date();
+        const endCapped = end > now ? new Date(Math.ceil(now.getTime() / 60000) * 60000) : end;
+        const result = await getClient().rollUp(data_type, start.toISOString(), endCapped.toISOString(), window_minutes * 60);
+        return jsonResult({ date, timeZone: tz, windowMinutes: window_minutes, ...(result as object) });
       } catch (err) {
         return errorResult(err);
       }
