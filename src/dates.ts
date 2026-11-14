@@ -77,3 +77,23 @@ export function buildTimeFilter(
   const fmt = (iso: string) => (opts.physical ? `${iso}T00:00:00Z` : iso);
   return `${field} >= "${fmt(startDate)}" AND ${field} < "${fmt(nextDayIso(endDateInclusive))}"`;
 }
+
+/** Minutes the given IANA timezone is ahead of UTC at instant `at`. */
+export function tzOffsetMinutes(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(at);
+  const get = (t: string) => parseInt(parts.find((p) => p.type === t)?.value ?? "0", 10);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return Math.round((asUtc - at.getTime()) / 60000);
+}
+
+/** UTC instant of local midnight at the start of `isoDate` in `timeZone`. */
+export function localMidnightUtc(isoDate: string, timeZone: string): Date {
+  const [y, m, d] = isoDate.split("-").map((n) => parseInt(n, 10));
+  const guess = Date.UTC(y, m - 1, d);
+  const first = guess - tzOffsetMinutes(new Date(guess), timeZone) * 60000;
+  // Re-check at the computed instant (handles DST changes around midnight).
+  return new Date(guess - tzOffsetMinutes(new Date(first), timeZone) * 60000);
+}
