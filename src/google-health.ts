@@ -122,6 +122,35 @@ export class GoogleHealthClient {
   }
 
   /**
+   * Values for a data type aggregated into fixed physical-time windows (e.g.
+   * hourly heart rate). One request instead of thousands of raw samples, so it
+   * stays within the Worker subrequest limit. Range max: 14 days for
+   * heart-rate / total-calories, 90 days for other types.
+   *
+   * @param startTime  RFC-3339 timestamp, inclusive
+   * @param endTime    RFC-3339 timestamp, exclusive
+   * @param windowSeconds aggregation window, e.g. 3600 for hourly
+   */
+  async rollUp(
+    dataType: string,
+    startTime: string,
+    endTime: string,
+    windowSeconds: number,
+  ): Promise<unknown> {
+    const url = `${HEALTH_BASE}/users/me/dataTypes/${dataType}/dataPoints:rollUp`;
+    const body = { range: { startTime, endTime }, windowSize: `${windowSeconds}s` };
+    const endDate = endTime.slice(0, 10);
+    return this.withCache(["rollUp", dataType, startTime, endTime, windowSeconds], endDate, () =>
+      this.paginate("rollupDataPoints", (pageToken) =>
+        this.request(url, {
+          method: "POST",
+          body: JSON.stringify(pageToken ? { ...body, pageToken } : body),
+        }),
+      ),
+    );
+  }
+
+  /**
    * Raw individual data points for a data type within a time window.
    * Use when you need intra-day detail rather than daily rollups.
    *
