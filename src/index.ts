@@ -13,6 +13,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { GoogleHandler } from "./google-handler";
 import { GoogleHealthClient } from "./google-health";
 import { registerTools } from "./tools";
+import { saveWidgetData } from "./widget";
 import { ICON_PNG_SIZES } from "./icon";
 import type { Env, Props } from "./types";
 
@@ -47,6 +48,7 @@ export class GoogleHealthMCP extends McpAgent<Env, Record<string, never>, Props>
         }),
       this.env.TIME_ZONE || "Europe/London",
       () => this.purgeCache(),
+      (json) => saveWidgetData(this.env.HEALTH_CACHE, this.env.PUBLIC_URL || "", json),
     );
   }
 

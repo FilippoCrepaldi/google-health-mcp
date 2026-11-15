@@ -16,6 +16,7 @@ import { Hono } from "hono";
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import type { Env, Props } from "./types";
 import { ICON_PNG_BASE64 } from "./icon";
+import { readWidgetData } from "./widget";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -53,6 +54,13 @@ function callbackUrl(reqUrl: string): string {
 // `icons` so clients that render server branding (e.g. Claude's connector list)
 // can show a logo. Decoded once from the base64-embedded PNG.
 const ICON_PNG_BYTES = Uint8Array.from(atob(ICON_PNG_BASE64), (c) => c.charCodeAt(0));
+
+// Dati dei widget iPhone del Diario Alimentare (vedi src/widget.ts).
+app.get("/widget/:token", async (c) => {
+  const dati = await readWidgetData(c.env.HEALTH_CACHE, c.req.param("token"));
+  if (dati === null) return c.json({ errore: "non trovato" }, 404);
+  return c.body(dati, 200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+});
 
 app.get("/icon.png", (c) =>
   c.body(ICON_PNG_BYTES, 200, {

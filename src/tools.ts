@@ -120,7 +120,27 @@ export function registerTools(
   getClient: () => GoogleHealthClient,
   timeZone: string,
   purgeCache: () => Promise<number>,
+  saveWidget?: (json: string) => Promise<{ url: string; chiavi: string[] }>,
 ) {
+  if (saveWidget) {
+    server.registerTool(
+      "salva_widget",
+      {
+        title: "Salva dati widget",
+        description: "Salva i dati che i widget iPhone del Diario Alimentare (app Scripting) mostrano: un oggetto JSON (stringa) unito per chiave a quello già salvato (es. {\"cibo\":{...}} oppure {\"corpo\":{...}}). Restituisce l'indirizzo da cui il widget legge i dati.",
+        inputSchema: { dati: z.string().max(50000).describe("Oggetto JSON in forma di stringa.") },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      },
+      async ({ dati }) => {
+        try {
+          return jsonResult(await saveWidget(dati));
+        } catch (err) {
+          return errorResult(err);
+        }
+      },
+    );
+  }
+
   // The headline tool: one call to decide "should I train today?"
   server.registerTool(
     "get_recovery_snapshot",
